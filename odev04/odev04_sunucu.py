@@ -1,0 +1,111 @@
+from enum import unique
+import socket 
+import threading
+import queue
+import time
+import pandas
+
+
+#Dosyayi bulundugu yerden okuma
+df = pandas.read_csv(r'/Users/eremkaralar/Desktop/GooglePlayData/googleplaystore.csv')
+
+
+def list_to_string(list):
+    
+    tostring = ''
+    for x in list:
+        
+        tostring = tostring + ' :: ' + x
+
+    return tostring
+
+
+
+# Kategori listesini biriciklestirme ve protokol icinde gosterebilmek icin yazilmis fonksiyon
+def unique_string(list1):
+ 
+    unique_list = []
+    unique_string = ""
+
+    for x in list1:
+     
+        if x not in unique_list:
+            unique_list.append(x)
+            unique_string = unique_string + ' :: ' + x
+
+    return unique_string    
+
+
+#Spesifik kolonu okuma ardindan biriciklestirme
+list = df.Category
+ulist = unique_string(list)
+
+protocol = {'HELLO' : 'HELLO :: EREM',
+            'LIST':'CATEGORIES' + ulist,
+            'QUIT' : 'BYE BYE'
+}
+
+
+#thread
+class myThread (threading.Thread):
+    def __init__(self, threadID, cSocket, addr):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.client_socket = cSocket
+        self.address = addr
+        
+    def run(self):
+        print ("Starting: ",self.threadID)
+        saat = time.ctime()
+        self.client_socket.send((saat + "\n").encode())
+        while True:
+            data = self.client_socket.recv(1024)
+            data_str = data.decode().strip()
+            if data_str[0:3] == 'APP':
+                tmp_name = data_str.split(" ",1)
+                self.query_name = tmp_name[0]
+                self.app_name = tmp_name[1]
+                #NOTFOUND - Key-Value Protokole eklenmedigi icin direkt NOTFOUND verecek.
+                if df[df["App"]==self.app_name].empty == False :
+                    result = df[df["App"]==self.app_name].values.tolist()
+                    #List icinde list halindeki satiri string haline donusturme islemleri
+                    nresult = result[0]
+                    final_result = ' :: '.join(str(e) for e in nresult)
+                    print(final_result)
+                    #Response icin protokol guncellemesi
+                    protocol.update(
+                        {'APP '+ self.app_name : 'PROPS ' + final_result })
+            elif data_str[0:5] == 'SEARCH':
+                return 0
+                
+            if data_str in protocol.keys():
+                response = protocol[data_str] + '\n'
+            else:
+                response = 'NOTFOUND' + '\n' 
+
+            self.client_socket.send(response.encode())
+
+            if data_str == 'QUIT':
+                client_socket.close()
+                break
+            
+
+
+        print("Ending: ",self.threadID)
+
+server_socket = socket.socket()
+host = "0.0.0.0"
+port = 12345
+server_socket.bind((host, port))
+server_socket.listen(1)   
+    
+thread_counter = 0
+
+while True:
+    print("New connection is waited. ")
+    client_socket, addr = server_socket.accept()
+    print("Yeni baglanti geldi:", addr)
+
+    th = myThread(thread_counter, client_socket, addr)
+    thread_counter += 1
+    th.start()  
