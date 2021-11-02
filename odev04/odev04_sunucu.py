@@ -69,35 +69,43 @@ class myThread (threading.Thread):
                 tmp_name = data_str.split(" ",1)
                 self.app_name = tmp_name[1]
                 if qname == 'APP':
-                #NOTFOUND - Key-Value Protokole eklenmedigi icin direkt NOTFOUND verecek.
-                    if df[df["App"]==self.app_name].empty == False :
-                        result = df[df["App"]==self.app_name].values.tolist()
-                        #List icinde list halindeki satiri string haline donusturme islemleri
-                        nresult = result[0]
+                    result = df[df["App"]==self.app_name].values.tolist()
+                    #List icinde list halindeki satiri string haline donusturme islemleri
+                    #nresult = result[0]
+                    #NOTFOUND - Key-Value Protokole eklenmedigi icin direkt NOTFOUND verecek.
+                    #nresult = result[0]
+                    empty_check = bool(result)
+                    if empty_check == False:
+                        response = 'NOTFOUND'
+                      
+                    else:
+                        nresult = result[0]   
                         final_result = ' :: '.join(str(e) for e in nresult)
                         #Response icin protokol guncellemesi
                         protocol.update(
                             {'APP '+ self.app_name : 'PROPS ' + final_result })
+                   
+
                 elif qname == 'SEARCH':
                     self.app_name = tmp_name[1]
                     app_name_with_parameters = tmp_name[1]
-                    if ':R:' or ':C:' or ':P:' in app_name_with_parameters :
-                        return 0
+                    #if ':R:' or ':C:' or ':P:' in self.app_name :
+                        #return 0
 
                     #difflib kutuphanesi kullanarak en yakin 3 appi bulma
-                    else:
-                        closest_list = difflib.get_close_matches(self.app_name, df.App,n=3)
+                    #else:
+                    closest_list = difflib.get_close_matches(self.app_name, df.App,n=3)
                     #Bulunanlari uygun formata donusturerek protokolu guncelleme
-                        closest_str = list_to_string(closest_list)
-                        if not closest_str :
-                            response = 'NOTFOUND'
-                        else:
-                            protocol.update(
+                    closest_str = list_to_string(closest_list)
+                    if not closest_str :
+                        response = 'NOTFOUND'
+                    else:
+                        protocol.update(
                             {'SEARCH '+ self.app_name : 'APP FOUND ' + closest_str })
 
                         
 
-                
+            #parametre error handling    
             if data_str in protocol.keys():
                 response = protocol[data_str] + '\n'
             else:
