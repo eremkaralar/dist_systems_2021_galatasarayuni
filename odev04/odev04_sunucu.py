@@ -4,6 +4,7 @@ import threading
 import queue
 import time
 import pandas
+import difflib
 
 
 #Dosyayi bulundugu yerden okuma
@@ -61,22 +62,32 @@ class myThread (threading.Thread):
         while True:
             data = self.client_socket.recv(1024)
             data_str = data.decode().strip()
-            if data_str[0:3] == 'APP':
+            tmp_query = data_str.split(" ",1)
+            qname = tmp_query[0]
+
+            if (qname == 'APP') or (qname == 'SEARCH'):
+                print("innnn")
                 tmp_name = data_str.split(" ",1)
-                self.query_name = tmp_name[0]
                 self.app_name = tmp_name[1]
+                if qname == 'APP':
                 #NOTFOUND - Key-Value Protokole eklenmedigi icin direkt NOTFOUND verecek.
-                if df[df["App"]==self.app_name].empty == False :
-                    result = df[df["App"]==self.app_name].values.tolist()
-                    #List icinde list halindeki satiri string haline donusturme islemleri
-                    nresult = result[0]
-                    final_result = ' :: '.join(str(e) for e in nresult)
-                    print(final_result)
-                    #Response icin protokol guncellemesi
+                    if df[df["App"]==self.app_name].empty == False :
+                        result = df[df["App"]==self.app_name].values.tolist()
+                        #List icinde list halindeki satiri string haline donusturme islemleri
+                        nresult = result[0]
+                        final_result = ' :: '.join(str(e) for e in nresult)
+                        #Response icin protokol guncellemesi
+                        protocol.update(
+                            {'APP '+ self.app_name : 'PROPS ' + final_result })
+                elif qname == 'SEARCH':
+                    self.app_name = tmp_name[1]
+                    #difflib kutuphanesi kullanarak en yakin 3 appi bulma
+                    closest_list = difflib.get_close_matches(self.app_name, df.App,n=3)
+                    #Bulunanlari uygun formata donusturerek protokolu guncelleme
+                    closest_str = list_to_string(closest_list)
                     protocol.update(
-                        {'APP '+ self.app_name : 'PROPS ' + final_result })
-            elif data_str[0:5] == 'SEARCH':
-                return 0
+                            {'SEARCH '+ self.app_name : 'APP FOUND ' + closest_str })
+
                 
             if data_str in protocol.keys():
                 response = protocol[data_str] + '\n'
