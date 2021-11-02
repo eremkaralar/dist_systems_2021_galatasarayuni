@@ -70,10 +70,6 @@ class myThread (threading.Thread):
                 self.app_name = tmp_name[1]
                 if qname == 'APP':
                     result = df[df["App"]==self.app_name].values.tolist()
-                    #List icinde list halindeki satiri string haline donusturme islemleri
-                    #nresult = result[0]
-                    #NOTFOUND - Key-Value Protokole eklenmedigi icin direkt NOTFOUND verecek.
-                    #nresult = result[0]
                     empty_check = bool(result)
                     if empty_check == False:
                         response = 'NOTFOUND'
@@ -118,11 +114,7 @@ class myThread (threading.Thread):
                                 filtered_str = unique_string(filtered_result)
                                 protocol.update(
                                     {'SEARCH '+ self.app_name_with_parameters : 'APP FOUND ' + filtered_str })
-                                
-
-                            
-                        
-                                
+           
                      #Rating-kategori icin parametre     
                     elif param_val_split[0] == 'R':
                         return 0       
