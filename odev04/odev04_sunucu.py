@@ -88,21 +88,56 @@ class myThread (threading.Thread):
 
                 elif qname == 'SEARCH':
                     self.app_name = tmp_name[1]
-                    app_name_with_parameters = tmp_name[1]
-                    #if ':R:' or ':C:' or ':P:' in self.app_name :
-                        #return 0
+                    self.app_name_with_parameters = tmp_name[1]
+                    split_parameters = self.app_name_with_parameters.split("::")
+                    closest_list = difflib.get_close_matches(split_parameters[0], df.App,n=5)
+                    splitted_name = split_parameters[0]
+                   
+                    if len(split_parameters) > 1:
+                        param_val_split = split_parameters[1].split(":")
+                        #Price parametresi
+                        if param_val_split[0] == 'P':
+                            price_value = param_val_split[1]
+            
+                            filtered_result = []
+                            result_name = ""
+                            for x in [0, 1, 2]:
+                                raw_result = df[df["App"]==closest_list[x]].values.tolist()
+                                result_price = raw_result[0][6]
+                                result_name = raw_result[0][0]
 
-                    #difflib kutuphanesi kullanarak en yakin 3 appi bulma
-                    #else:
-                    closest_list = difflib.get_close_matches(self.app_name, df.App,n=3)
-                    #Bulunanlari uygun formata donusturerek protokolu guncelleme
-                    closest_str = list_to_string(closest_list)
-                    if not closest_str :
-                        response = 'NOTFOUND'
+                                if price_value == '0':
+                                    if result_price == 'Free':
+                                        filtered_result.append(result_name) 
+                                else:
+                                    if result_price == 'Free':
+                                        num_res_price = 0
+                                        if float(num_res_price) < float(price_value):
+                                            filtered_result.append(raw_result[0][0]) 
+
+                                filtered_str = unique_string(filtered_result)
+                                protocol.update(
+                                    {'SEARCH '+ self.app_name_with_parameters : 'APP FOUND ' + filtered_str })
+                                
+
+                            
+                        
+                                
+                     #Rating-kategori icin parametre     
+                    elif param_val_split[0] == 'R':
+                        return 0       
+                        
                     else:
-                        protocol.update(
-                            {'SEARCH '+ self.app_name : 'APP FOUND ' + closest_str })
-
+                        #difflib kutuphanesi kullanarak en yakin 3 appi bulma
+                        closest_list = difflib.get_close_matches(self.app_name, df.App,n=3)
+                    #Bulunanlari uygun formata donusturerek protokolu guncelleme
+                        closest_str = list_to_string(closest_list)
+                        if not closest_str :
+                            response = 'NOTFOUND'
+                        else:
+                            protocol.update(
+                                {'SEARCH '+ self.app_name : 'APP FOUND ' + closest_str })
+                        
                         
 
             #parametre error handling    
