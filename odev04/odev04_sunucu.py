@@ -66,7 +66,6 @@ class myThread (threading.Thread):
             qname = tmp_query[0]
 
             if (qname == 'APP') or (qname == 'SEARCH'):
-                print("innnn")
                 tmp_name = data_str.split(" ",1)
                 self.app_name = tmp_name[1]
                 if qname == 'APP':
@@ -81,18 +80,28 @@ class myThread (threading.Thread):
                             {'APP '+ self.app_name : 'PROPS ' + final_result })
                 elif qname == 'SEARCH':
                     self.app_name = tmp_name[1]
+                    app_name_with_parameters = tmp_name[1]
+                    if ':R:' or ':C:' or ':P:' in app_name_with_parameters :
+                        return 0
+
                     #difflib kutuphanesi kullanarak en yakin 3 appi bulma
-                    closest_list = difflib.get_close_matches(self.app_name, df.App,n=3)
+                    else:
+                        closest_list = difflib.get_close_matches(self.app_name, df.App,n=3)
                     #Bulunanlari uygun formata donusturerek protokolu guncelleme
-                    closest_str = list_to_string(closest_list)
-                    protocol.update(
+                        closest_str = list_to_string(closest_list)
+                        if not closest_str :
+                            response = 'NOTFOUND'
+                        else:
+                            protocol.update(
                             {'SEARCH '+ self.app_name : 'APP FOUND ' + closest_str })
+
+                        
 
                 
             if data_str in protocol.keys():
                 response = protocol[data_str] + '\n'
             else:
-                response = 'NOTFOUND' + '\n' 
+                response = 'ERROR' + '\n' 
 
             self.client_socket.send(response.encode())
 
