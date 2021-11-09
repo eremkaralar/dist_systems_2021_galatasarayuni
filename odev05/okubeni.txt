@@ -1,0 +1,1 @@
+Liste bastirirken ve mesajlasma konusunda bir tip (donusturme) hatası gerceklesmektedir. Ekrana bastirirken gerekli tipi alamadagindan listi ve mesajlari alabilmemize ragmen ekrana basmiyor.
