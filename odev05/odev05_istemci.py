@@ -3,68 +3,158 @@ import socket
 import threading
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
 import queue
 import time
+from time import gmtime, strftime
+
+#Gelen msjlar icin class
+class gelenMsj:
+    msj = ""
+    nickname = ""
+    tip = -1
+
+    def __init__(self, org):
+        self.org = org
+#Tipler icin class
+class Enum(set):
+    def __getattr__(self, tip):
+        if tip in self:
+            return tip
+
+class mTip:
+    yerTip = Enum(["LCL", "SERV"])
+    cevapTip = Enum(["SYS", "LIST","NLOG", "NSIGN", "ERROR","REJ", "PUB", "PRIV"])
 
 
+
+#App icin ayri thread olusacagindan screenQueue olarak duzenlendi
 class ReadThread (threading.Thread):
-    def __init__(self, name, csoc, threadQueue, app):
+    def __init__(self, name, csoc, threadQueue, screenQueue):
         threading.Thread.__init__(self)
         self.name = name
         self.csoc = csoc
         self.nickname = ""
         self.threadQueue = threadQueue
-        self.app = app
+        self.screenQueue = screenQueue
 
     def incoming_parser(self, data):
         #ToDo
-        return 0
+        print("Gelen data:", data)
+        gelenmesaj = gelenMsj(mTip.yerTip.SERV)
 
+        kmt = data[0:3]
+        opw = data[4:]
+        print("Gelen kmt",str(kmt))
+
+        if str(kmt) == "b'TIN'":
+            self.threadQueue.put("/tin")
+            return
+
+        if kmt == "GNL":
+            splittr = opw.split(":")
+            gelenmesaj.tip = mTip.cevapTip.PUB
+            gelenmesaj.nickname = splittr[0]
+            gelenmesaj.msj = splittr[1]
+            return "OKG"
+        if kmt == "PRV":
+            splittr = opw.split(":")
+            gelenmesaj.tip = mTip.cevapTip.PRIV
+            gelenmesaj.nickname = splittr[0]
+            gelenmesaj.msj = splittr[1]
+            return "OKP"
+        elif kmt == "HEL":
+            gelenmesaj.tip = mTip.cevapTip.NLOG
+            gelenmesaj.nickname = opw
+        elif kmt == "SYS":
+            gelenmesaj.tip = mTip.cevapTip.SYS
+            gelenmesaj.msj = opw
+        elif kmt == "REJ":
+            gelenmesaj.tip = mTip.cevapTip.REJ
+            gelenmesaj.nickname = opw
+        elif kmt == "GLS":
+            gelenmesaj.type = mTip.cevapTip.LIST
+            gelenmesaj.nickname = opw
+        elif kmt == "ERL":
+            gelenmesaj.type = mTip.cevapTip.NSIGN
+        elif kmt == "ERR":
+            gelenmesaj.type = mTip.cevapTip.ERROR
+            print("ERR")
+
+        return gelenmesaj
+       
     def run(self):
-        #ToDo
-        return 0
+        while True:
+            data = self.csoc.recv(1024)
+            msj = self.incoming_parser(data)
+            if msj:
+                self.screenQueue.put(msj)
 
 class WriteThread (threading.Thread):
-    def __init__(self, name, csoc, threadQueue):
+    def __init__(self, name, csoc, threadQueue,screenQueue):
         threading.Thread.__init__(self)
         self.name = name
         self.csoc = csoc
         self.threadQueue = threadQueue
+        self.screenQueue = screenQueue
 
+    def outgoing_parser(self, msj):
+        if msj[0] == "/":
+            splittr = msj.split(" ")
+            kmt = splittr[0][1:]
+          
+            if kmt == "tin":
+                return "TON"
+            if kmt == "user":
+                return "NIC " + splittr[1]
+            if kmt == "list":
+                return "GLS"
+            if kmt == "quit":
+                return "QUI"
+            if kmt == "msg":
+                return "MSG %s:%s" % (splittr[1], " ".join(splittr[2:]))
+
+ 
     def run(self):
-        return 0
+        while True:
+            if self.threadQueue.qsize() > 0:
+                queueMsj = self.threadQueue.get()
+                gidenMsj = self.outgoing_parser(queueMsj)
+                if gidenMsj:
+                    gidenMsj += "\n"
+                    print("gidenMsj: " + gidenMsj)
+                    try:
+                        self.csoc.send(gidenMsj.encode())
+                    except socket.error:
+                        self.csoc.close()
+                        break
+                else:
+                    gelenMesaj = gelenMsj(mTip.yerTip.LCL)
+                    gelenMesaj.tip = mTip.cevapTip.SYS
+                    gelenMesaj.msj = "Komut Error"
+                    self.screenQueue.put(gelenMesaj)
 
+#App icin ayri thread olusacagindan screenQueue eklendi
 class ClientDialog(QDialog):
-#An example application for PyQt. Instantiate and call the run method to run.
-    def __init__(self, threadQueue):
+    def __init__(self, threadQueue,screenQueue):
         self.threadQueue = threadQueue
-# create a Qt application --- every PyQt app needs one
+        self.screenQueue = screenQueue
         self.qt_app = QApplication(sys.argv)
-# Call the parent constructor on the current object
         QDialog.__init__(self, None)
-# Set up the window
         self.setWindowTitle('IRC Client')
         self.setMinimumSize(500, 200)
-# Add a vertical layout
         self.vbox = QVBoxLayout()
-# The sender textbox
         self.sender = QLineEdit("", self)
-# The channel region
         self.channel = QTextBrowser()
-# The send button
         self.send_button = QPushButton('&Send')
-# Connect the Go button to its callback
         self.send_button.clicked.connect(self.outgoing_parser)
-# Add the controls to the vertical layout
         self.vbox.addWidget(self.channel)
         self.vbox.addWidget(self.sender)
         self.vbox.addWidget(self.send_button)
 # start timer
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateText)
-# update every 100 ms
         self.timer.start(10)
-# Use the vertical layout for the current window
         self.setLayout(self.vbox)
     
     def updateText(self):
@@ -72,25 +162,76 @@ class ClientDialog(QDialog):
             data = self.screenQueue.get()
             t = time.localtime()
             pt = "%02d:%02d:%02d" % (t.tm_hour, t.tm_min, t.tm_sec)
-            self.channel.append(pt + " " + data)
+            msj = self.incoming_parser(data)
+            if msj:
+                message = self.formatMessage(msj, False)
+                self.channel.append(msj)
+            
         else: 
             return
+
+    def cprint(self,data):
+        self.channel.append(data)    
+
+    def incoming_parser(self, msj):
+        msjType = msj.tip
+        cevapTip = mTip.cevapTip
+
+        if msjType == cevapTip.PUB:
+            return "<" + msj.nickname + ">:" + msj.msj
+        if msjType == cevapTip.PRIV:
+            return "*" + msj.nickname + "*:" + msj.msj
+        elif msjType == cevapTip.LIST:
+            self.userList.clear()
+            for item in msj.nickname.split(":"):
+                self.userList.append(item)
+            return    
+        elif msjType == cevapTip.NLOG:
+            return "Giris basarili: <" + msj.nickname + ">"
+        elif msjType == cevapTip.REJ:
+            return "Kullanici reddi: <" + msj.nickname + ">"
+        elif msjType == cevapTip.SYS:
+            return msj.msj
+        elif msjType == cevapTip.ERROR:
+            return "Sunucu hatasi"
+        elif msjType == cevapTip.NSIGN:
+            return "Once giris yapin"
+        
+    def outgoing_parser(self):
+        msj = str(self.sender.text())
+        if len(msj) > 0:
+            msjshow = self.formatMessage(msj, True)
+            self.sender.clear()
+            self.channel.append(msjshow)
+            self.threadQueue.put(msj)
+
+
+    
+    def formatMessage(self, msj, isLocal):
+        res = strftime("%H:%M:%S", gmtime())
+        res +=  " -Local-" if isLocal else " -Server-"
+        return res + ": " + msj
+    
+    def run(self):
+        self.show()
+        self.qt_app.exec_()
 
 
 
  # connect to the server
 s = socket.socket()
-#ToDo: Host ve port parametre olarak alinacak. SendQueue duzenlenecek
-host = '127.0.0.1'
-port = '12345'
-s.connect((host,port))
-sendQueue = ...           
 
-app = ClientDialog(sendQueue)
+host = str(sys.argv[1])
+port = int(sys.argv[2])
+s.connect((host,port))
+sendQueue = queue.Queue(maxsize=0)          
+screenQueue = queue.Queue(maxsize=0) 
+
+app = ClientDialog(sendQueue,screenQueue)
 # start threads
-rt = ReadThread("ReadThread", s, sendQueue, app)
+rt = ReadThread("ReadThread", s, sendQueue, screenQueue)
 rt.start()
-wt = WriteThread("WriteThread", s, sendQueue)
+wt = WriteThread("WriteThread", s, sendQueue,screenQueue)
 wt.start()
 app.run()
 rt.join()
