@@ -5,134 +5,125 @@ import threading
 import time
 import queue
 
-class write_thread(threading.Thread):
-    def __init__(self, name, cSock,cAddr,cQueue):
+class Write_Thread(threading.Thread):
+    def __init__(self, name, client_socket, client_address, client_queue):
         threading.Thread.__init__(self)
         self.name = name
-        self.cSock = cSock
-        self.cAddr = cAddr
-        self.cQueue = cQueue
+        self.client_socket = client_socket
+        self.client_address = client_address
+        self.client_queue = client_queue
 
     def run(self):
-        print(self.name , "starting...")
-        self.cSock.send(b'Welcome')
+        print(f"{self.name} commencing..")
+        self.client_socket.send(b'Welcome.\n> ')
 
         while True:
-            data = self.cQueue.get()
-            self.cSock.send(data.encode())
-        
+            response = self.client_queue.get()
+            self.client_socket.send(self.format_message(response).encode())
 
-            if data == "BYE":
-                time.sleep(1)
-                self.cSock.close()
+            if (response == "BYE"):
+                time.sleep(.2)
+                self.client_socket.close()
                 break
 
-        print(self.name, "ending...")    
+        print(f"{self.name} ending..")
+    
+    def format_message(self, data):
+        return (data + "\n> ")
 
-class read_thread(threading.Thread):
-    def __init__(self, name, cSock,cAddr,cQueue,fihrist):
+
+class Read_Thread(threading.Thread):
+    def __init__(self, name, client_socket, client_address, client_queue, fihrist):
         threading.Thread.__init__(self)
         self.name = name
-        self.cSock = cSock
-        self.cAddr = cAddr
-        self.cQueue = cQueue
+        self.client_socket = client_socket
+        self.client_address = client_address
+        self.client_queue = client_queue
         self.fihrist = fihrist
-        self.username = None
 
     def run(self):
-        print(self.name , "starting...")
-        #self.cSock.send(b'Welcome')
-        while True:  
-            data = self.cSock.recv(1024).decode().strip()
-            retVal = self.incoming_parser(data)
+        print(f"{self.name} commencing..")
         
-            if retVal == 1:
+        while True:
+            data = self.client_socket.recv(1024).decode().strip()        
+            return_value = self.incoming_parser(data)
+
+            if return_value == 1:
                 break
-            
-            #print(self.cAddr, "says: ", data.decode())
-            #self.cSock.send(b'OK')
 
+        print(f"{self.name} ending..")
 
-        print(self.name , "ending...")
-
-    def incoming_parser(self,data):
+    def incoming_parser(self, data):
         ret = 0
-        if data[:4] == "NIC ":
+
+        if (data[:4] == "NIC "):
             username = data[4:]
             if len(username) > 0:
-                if username in self.fihrist.keys():
-                    response = "REJ" + username
+                if (username in self.fihrist.keys()):
+                    response = "REJ {username}"
                 else:
-                    response = "WEL" + username   
+                    response = "WEL {username}"
+                    self.fihrist[username] = self.client_queue
                     self.username = username
-                    self.fihrist[username] = self.cQueue
 
-        elif data[:4] == "PRV":
-            if self.username == None:
+        elif data[:4] == "PRV ":
+            if (self.username == None):
                 response = "LRR"
-            #error handling
             else:
-                split_data = data[:4].split(":",1)
-                if len(split_data) == 2:
-                    target_user = split_data[0]
-                    message = split_data[1]
-                    if target_user in self.fihrist.keys():
-                        response = "OKP"
-                        
-                        self.fihrist[target_user].put("PRV " + self.username + ":" + message)
+                splitted_data = data[4:].split(":")
+                
+                if (len(splitted_data) == 2):
+                    target_user = splitted_data[0]
+                    message = splitted_data[1]
 
+                    if (target_user in self.fihrist.keys()):
+                        response = "OKP"
+                        self.fihrist[target_user].put(f"PRV {self.username}:{message}") 
                     else:
                         response = "NOP"
-                
                 else:
                     response = "ERR"
-
-
-        elif data == "PIN":
+    
+        elif (data == "PIN"):
             response = "PON"
-
-        elif data == "QUI":
+        elif (data == "QUI"):
             response = "BYE"
             ret = 1
-
         else:
-            response = "ERR"    
-                       
-        self.cQueue.put(response)
+            response = "ERR"
 
-
+        self.client_queue.put(response)
+        
         return ret
-
-
 
 def main():
     port = 12345
     host = "0.0.0.0"
-    thread_count = 0
+    thread_counter = 0
 
-    l_sock = socket.socket()
-    l_sock.bind((host,port))
+    listener_socket = socket.socket()
+    listener_socket.bind((host, port))
 
-#Herkese cevap vermek icin buffera gerek yok o yuzden param 0
-    l_sock.listen(0)
+    listener_socket.listen(0)
 
-    fihrist = ()
-    print("Server is commencing! ")
-    
+    fihrist = {}
+
+    print("Server is initializing..")
     while True:
-        c_sock,c_addr = l_sock.accept()
-        q = queue.Queue()
-        writeThread = write_thread("Write Thread - " + str(thread_count),c_sock,c_addr,q)
-        print("Client has connected:  "
-        ,c_addr)
-        readThread = read_thread("Read thread - " + str(thread_count),c_sock,c_addr,q)
-        #run()
-        readThread.start()
-        writeThread.start()
-        thread_count += 1
-    print("Server is terminating ")
+        client_socket, client_address = listener_socket.accept()
+        print("A new client has connected: ", client_address)
 
+        message_queue = queue.Queue()
 
-    
+        write_thread = Write_Thread("WriteThread-" + str(thread_counter), client_socket, client_address, message_queue)
+        read_thread = Read_Thread("ReadThread-" + str(thread_counter), client_socket, client_address, message_queue, fihrist)
+        
+        read_thread.start()
+        write_thread.start()
+
+        thread_counter += 1
+
+    print("Server has closed.")
+
 if __name__ == "__main__":
     main()
