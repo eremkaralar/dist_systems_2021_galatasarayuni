@@ -1,0 +1,15 @@
+10:12:24: REG erem:12345
+> 10:12:24: OKR erem
+> 10:12:30: NIC erem:1234
+> 10:12:30: WPW erem
+> 10:12:36: NIC erem:12345
+> 10:12:36: HEL erem
+> 10:12:46: CHP erem:54321
+> 10:12:46: OKC erem
+> 10:13:03: NIC erem:12345
+> 10:13:03: WPW erem
+> 10:13:16: NIC erem:54321
+> 10:13:16: HEL erem
+> 10:13:20: QUI
+> 10:13:20: BYE
+> 

@@ -4,7 +4,42 @@ import socket
 import threading
 import time
 import queue
+from time import gmtime, strftime
+import os
+import sys
 
+class Logger_Thread(threading.Thread):
+    def __init__(self, name, client_socket, client_address, client_queue):
+        threading.Thread.__init__(self)
+        self.name = name
+        self.client_socket = client_socket
+        self.client_address = client_address
+        self.client_queue = client_queue
+
+    def run(self):
+        print(f"{self.name} commencing..")
+        logs = ""
+
+        while True:
+            #Log tutulmasi burada gerceklesir.
+            response = self.client_queue.get()
+            single_log = self.format_message(response)
+            logs = logs + single_log
+            with open(os.path.join(sys.path[0], "logs.txt"), "w+") as f:
+                f.write(logs)
+
+            if (response == "BYE"):
+                time.sleep(.2)
+                self.client_socket.close()
+                break
+
+        print(f"{self.name} ending..")
+    
+    def format_message(self, data):
+        res = strftime("%H:%M:%S", gmtime())
+        return (res + ": " + data + "\n> ")
+        
+ 
 class Write_Thread(threading.Thread):
     def __init__(self, name, client_socket, client_address, client_queue):
         threading.Thread.__init__(self)
@@ -33,13 +68,14 @@ class Write_Thread(threading.Thread):
 
 
 class Read_Thread(threading.Thread):
-    def __init__(self, name, client_socket, client_address, client_queue, fihrist):
+    def __init__(self, name, client_socket, client_address, client_queue, fihrist,logger_queue):
         threading.Thread.__init__(self)
         self.name = name
         self.client_socket = client_socket
         self.client_address = client_address
         self.client_queue = client_queue
         self.fihrist = fihrist
+        self.logger_queue = logger_queue
 
     def run(self):
         print(f"{self.name} commencing..")
@@ -121,6 +157,8 @@ class Read_Thread(threading.Thread):
             response = "ERR"
 
         self.client_queue.put(response)
+        self.logger_queue.put(data)
+        self.logger_queue.put(response)
         
         return ret
 
@@ -136,18 +174,23 @@ def main():
 
     fihrist = {}
 
+    
+
     print("Server is initializing..")
     while True:
         client_socket, client_address = listener_socket.accept()
         print("A new client has connected: ", client_address)
 
         message_queue = queue.Queue()
+        logger_queue = queue.Queue()
 
         write_thread = Write_Thread("WriteThread-" + str(thread_counter), client_socket, client_address, message_queue)
-        read_thread = Read_Thread("ReadThread-" + str(thread_counter), client_socket, client_address, message_queue, fihrist)
+        read_thread = Read_Thread("ReadThread-" + str(thread_counter), client_socket, client_address, message_queue, fihrist,logger_queue)
+        logger_thread = Logger_Thread("LoggerThread-" + str(thread_counter), client_socket, client_address, logger_queue)
         
         read_thread.start()
         write_thread.start()
+        logger_thread.start()
 
         thread_counter += 1
 
