@@ -56,15 +56,43 @@ class Read_Thread(threading.Thread):
     def incoming_parser(self, data):
         ret = 0
 
-        if (data[:4] == "NIC "):
-            username = data[4:]
-            if len(username) > 0:
-                if (username in self.fihrist.keys()):
-                    response = "REJ {username}"
+        if (data[:4] == "REG "):
+            splitted_data = data[4:].split(":")
+            if len(splitted_data) == 2:
+                uname = splitted_data[0]
+                pword = splitted_data[1]
+                user = {uname:pword}
+                self.fihrist.update(user)
+                response = "OKR " + (uname)
+            else:
+                response = "NOR" 
+
+        elif (data[:4] == "NIC "):
+            splitted_data = data[4:].split(":")
+            uname = splitted_data[0]
+            pword = splitted_data[1]
+            if len(uname) > 0:
+                if (uname not in self.fihrist.keys()):
+                    response = "REJ " + (uname)
                 else:
-                    response = "WEL {username}"
-                    self.fihrist[username] = self.client_queue
-                    self.username = username
+                    if ((uname,pword) not in self.fihrist.items()):
+                        response = "WPW " + (uname)
+                    else:    
+                        response = "HEL " + (uname)
+                        self.fihrist[uname] = self.client_queue
+                        self.username = uname
+        elif (data[:4] == "CHP "): 
+            splitted_data = data[4:].split(":")
+            uname = splitted_data[0]
+            newpword = splitted_data[1]
+            if len(splitted_data) == 2:
+                if (uname not in self.fihrist.keys()):
+                    response = "CRR "
+                else:
+                    self.fihrist.update({uname : newpword})
+                    response = "OKC " + (uname)
+            else:
+                response = "CRR "       
 
         elif data[:4] == "PRV ":
             if (self.username == None):
